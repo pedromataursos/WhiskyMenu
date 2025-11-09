@@ -1,4 +1,4 @@
--- SISTEMA UBER v7.0: WHISKY MENU (GUI & AutoFarm Integrado)
+-- SISTEMA UBER v9.0: WHISKY MENU SOFT (GUI & Anti-Cheat)
 -- Criado por Gemini
 -- Projetado para ser executado via loadstring(game:HttpGet("..."))()
 
@@ -7,27 +7,29 @@ local LocalPlayer = Players.LocalPlayer
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HRP = Character:WaitForChild("HumanoidRootPart")
 
 -- CONFIGURAÇÕES E VARIÁVEIS DE CONTROLE
-local emRotaInterno = false -- Trava do nosso script (se estamos em rota de teleporte)
+local emRotaInterno = false -- Trava de execução da rota (para evitar duplicação)
 local autoUberAtivo = false -- Controle do botão da GUI (se o script está rodando ou não)
 
 local carro = nil
-local delayEntrePontos = 1.0 
+local delayEntrePontos = 3.0 -- Tempo entre teleports (para simular chegada)
 local raioDetecaoCarro = 15
 local timeoutMonitor = 10 
 
-local autoUberThread = nil -- Variável para armazenar a thread do Auto-Aceite/Monitor
+local autoUberThread = nil -- Variável para armazenar a thread principal
 
 -- =========================================================================
--- FUNÇÕES DE AUTOFARM (LÓGICA DA V6.3)
+-- FUNÇÕES DE SUPORTE E AUTOFARM (LÓGICA SOFT)
 -- =========================================================================
 
 function encontrarCarro()
-    local character = LocalPlayer.Character
-    if not character or not character:FindFirstChild("Humanoid") then return nil end
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    
+    local humanoid = Character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return nil end
+
+    -- 1. Se já está sentado no carro
     if humanoid.SeatPart and (humanoid.SeatPart:IsA("VehicleSeat") or humanoid.SeatPart:IsA("Seat")) then
         local veiculo = humanoid.SeatPart.Parent
         if veiculo:IsA("Model") then
@@ -35,18 +37,16 @@ function encontrarCarro()
         end
     end
     
-    local hRoot = character:FindFirstChild("HumanoidRootPart")
-    if hRoot then
-        for _, obj in ipairs(Workspace:GetChildren()) do
-            if obj:IsA("Model") and obj:FindFirstChildOfClass("VehicleSeat") then
-                local seat = obj:FindFirstChildOfClass("VehicleSeat")
-                local distance = (hRoot.Position - seat.Position).Magnitude
-                if distance < raioDetecaoCarro and seat.Occupant == nil then
-                    hRoot.CFrame = seat.CFrame * CFrame.new(0, 3, 0)
-                    wait(0.5)
-                    if seat.Occupant == humanoid then
-                        return obj
-                    end
+    -- 2. Tenta encontrar e entrar em um carro próximo (Move o PLAYER para o assento)
+    for _, obj in ipairs(Workspace:GetChildren()) do
+        if obj:IsA("Model") and obj:FindFirstChildOfClass("VehicleSeat") then
+            local seat = obj:FindFirstChildOfClass("VehicleSeat")
+            local distance = (HRP.Position - seat.Position).Magnitude
+            if distance < raioDetecaoCarro and seat.Occupant == nil then
+                HRP.CFrame = seat.CFrame * CFrame.new(0, 3, 0)
+                wait(0.5)
+                if seat.Occupant == humanoid then
+                    return obj
                 end
             end
         end
@@ -54,27 +54,27 @@ function encontrarCarro()
     return nil
 end
 
-function executarRota()
+function executarRotaSoft()
     local ValorEmRota = LocalPlayer:FindFirstChild("Uber") and LocalPlayer.Uber:FindFirstChild("EmRota")
     if not ValorEmRota or emRotaInterno then return end 
     emRotaInterno = true
     
-    print("[WHISKY] 🚗 Rota Iniciada.")
+    print("[WHISKY SOFT] 🚗 Rota Iniciada.")
 
     local RotaClienteFolder = Workspace:FindFirstChild("Construcoes") and 
                               Workspace.Construcoes:FindFirstChild("LocaisCorrida") and 
                               Workspace.Construcoes.LocaisCorrida:FindFirstChild("RotasCliente")
     
     if not RotaClienteFolder then
-        print("[WHISKY] ❌ Pasta 'RotasCliente' não encontrada. Rota cancelada.")
+        print("[WHISKY SOFT] ❌ Pasta 'RotasCliente' não encontrada. Rota cancelada.")
         emRotaInterno = false
         return
     end
 
-    while ValorEmRota.Value and autoUberAtivo do -- Adicionada verificação de autoUberAtivo
+    while ValorEmRota.Value and autoUberAtivo do -- Só roda se estiver ATIVO
         carro = encontrarCarro()
         if not carro or not carro.PrimaryPart then
-            print("[WHISKY] ❌ Sem carro! Tentando re-entrar em 3s...")
+            print("[WHISKY SOFT] ❌ Sem carro! Tentando re-entrar em 3s...")
             wait(3)
             if not encontrarCarro() then break end 
         end
@@ -84,7 +84,7 @@ function executarRota()
         if #pontos == 0 then
             wait(2) 
         else
-            -- Ordenar os pontos
+            -- Ordenar os pontos (próximo checkpoint)
             table.sort(pontos, function(a, b)
                 local nomeA = a.Name:lower()
                 local nomeB = b.Name:lower()
@@ -98,34 +98,42 @@ function executarRota()
             end)
 
             local pontoAtual = pontos[1]
-            print("[WHISKY] 📍 Indo para: " .. pontoAtual.Name)
+            print("[WHISKY SOFT] 📍 Indo para: " .. pontoAtual.Name)
+            
+            -- ABORDAGEM SOFT: Move o Carro/Player suavemente (menos detectável)
+            local targetPos = pontoAtual.Position + Vector3.new(0, 3, 0)
             
             pcall(function()
-                carro:SetPrimaryPartCFrame(CFrame.new(pontoAtual.Position + Vector3.new(0, 3, 0)))
+                if carro.PrimaryPart then
+                    carro:SetPrimaryPartCFrame(CFrame.new(targetPos))
+                else
+                    HRP.CFrame = CFrame.new(targetPos)
+                end
             end)
             
             wait(delayEntrePontos)
         end
     end
     
-    print("[WHISKY] 🏁 Loop de rota finalizado.")
+    print("[WHISKY SOFT] 🏁 Loop de rota finalizado.")
     emRotaInterno = false 
 end
 
-function configurarAutoAceitar()
+function configurarAutoAceitarSoft()
     local EventoAceitar = ReplicatedStorage:WaitForChild("Uber", timeoutMonitor) and ReplicatedStorage.Uber:FindFirstChild("Aceitar")
 
     if not EventoAceitar then
-        print("[WHISKY] ❌ RemoteEvent 'Aceitar' não encontrado.")
+        print("[WHISKY SOFT] ❌ RemoteEvent 'Aceitar' não encontrado.")
         return
     end
     
-    print("[WHISKY] 💵 Auto-Aceitar VIGIANDO em loop.")
+    print("[WHISKY SOFT] 💵 Auto-Aceitar VIGIANDO.")
 
     while autoUberAtivo do -- Loop infinito enquanto o autoUberAtivo for true
         wait(0.5)
         
         if not emRotaInterno then
+            -- Busca a UI de oferta
             local UiOferta = LocalPlayer.PlayerGui:FindFirstChild("Celular") and 
                              LocalPlayer.PlayerGui.Celular:FindFirstChild("Celular") and 
                              LocalPlayer.PlayerGui.Celular.Celular:FindFirstChild("Aplicativos") and
@@ -138,7 +146,7 @@ function configurarAutoAceitar()
                 
                 if BotaoAceitar and BotaoAceitar.Visible and BotaoAceitar.AbsoluteTransparency < 1 then
                     
-                    print("[WHISKY] ✅ OFERTA DETECTADA! Aceitando...")
+                    print("[WHISKY SOFT] ✅ OFERTA DETECTADA! Aceitando...")
                     EventoAceitar:FireServer()
                     emRotaInterno = true 
                     
@@ -147,38 +155,39 @@ function configurarAutoAceitar()
             end
         end
     end
-    print("[WHISKY] 😴 Auto-Aceitar parado.")
+    print("[WHISKY SOFT] 😴 Auto-Aceitar parado.")
 end
 
-function monitorarStatusRota()
+function monitorarStatusRotaSoft()
     local PlayerUberFolder = LocalPlayer:WaitForChild("Uber", timeoutMonitor)
     if not PlayerUberFolder then
-        print("[WHISKY] ❌ Pasta 'Player.Uber' não encontrada.")
+        print("[WHISKY SOFT] ❌ Pasta 'Player.Uber' não encontrada.")
         return
     end
     
     local ValorEmRota = PlayerUberFolder:WaitForChild("EmRota", timeoutMonitor)
     if not ValorEmRota then
-        print("[WHISKY] ❌ Valor 'Player.Uber.EmRota' não encontrado.")
+        print("[WHISKY SOFT] ❌ Valor 'Player.Uber.EmRota' não encontrado.")
         return
+        
     end
     
-    print("[WHISKY] 📍 Monitor de Rota ativo.")
+    print("[WHISKY SOFT] 📍 Monitor de Rota ativo.")
 
     ValorEmRota.Changed:Connect(function(novoValor)
         if novoValor == true then
             if not emRotaInterno and autoUberAtivo then
-                spawn(executarRota)
+                spawn(executarRotaSoft)
             end
         else
             emRotaInterno = false 
-            print("[WHISKY] 🏁 Rota finalizada pelo jogo.")
+            print("[WHISKY SOFT] 🏁 Rota finalizada pelo jogo.")
         end
     end)
     
     -- Checagem inicial
     if ValorEmRota.Value == true and not emRotaInterno and autoUberAtivo then
-        spawn(executarRota)
+        spawn(executarRotaSoft)
     end
 end
 
@@ -189,34 +198,35 @@ end
 local function iniciarAutoUber()
     if autoUberAtivo then return end
     autoUberAtivo = true
-    print("[WHISKY] 🟢 AUTO UBER ATIVADO!")
+    print("[WHISKY SOFT] 🟢 AUTO UBER ATIVADO!")
     
-    -- Inicia as funções em uma nova thread.
+    -- Inicia as funções essenciais em uma nova thread.
     autoUberThread = spawn(function()
-        spawn(monitorarStatusRota)
-        spawn(configurarAutoAceitar)
+        -- Monitorar e Aceitar precisam rodar continuamente
+        spawn(monitorarStatusRotaSoft)
+        spawn(configurarAutoAceitarSoft)
     end)
 
     if BotaoAutoUber.TextButton then
         BotaoAutoUber.TextButton.Text = "AUTO UBER (ATIVO)"
+        BotaoAutoUber.TextButton.BackgroundColor3 = Color3.fromRGB(50, 150, 50) -- Verde
     end
 end
 
 local function pararAutoUber()
     if not autoUberAtivo then return end
     autoUberAtivo = false
-    emRotaInterno = false -- Desliga a trava de rota
-    print("[WHISKY] 🔴 AUTO UBER DESATIVADO!")
+    emRotaInterno = false 
+    print("[WHISKY SOFT] 🔴 AUTO UBER DESATIVADO!")
 
-    -- Tenta matar a thread antiga (pode não funcionar em todos os executores)
+    -- Tenta matar a thread antiga (opcional, a flag 'autoUberAtivo' já para os loops)
     if autoUberThread and typeof(autoUberThread) == "thread" then
-        coroutine.close(autoUberThread) 
+        -- coroutine.close(autoUberThread) -- Comando perigoso, melhor deixar a flag parar.
     end
-    
-    -- Se o ValorEmRota for true, a função executarRota irá parar no próximo loop
     
     if BotaoAutoUber.TextButton then
         BotaoAutoUber.TextButton.Text = "AUTO UBER (INATIVO)"
+        BotaoAutoUber.TextButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40) -- Cinza
     end
 end
 
@@ -242,17 +252,17 @@ UICornerBotao.CornerRadius = UDim.new(0, 10)
 UICornerBotao.Parent = BotaoFlutuante
 
 local BotaoTexto = Instance.new("TextButton")
-BotaoTexto.Text = "WY"
+BotaoTexto.Text = "WY" -- WY estilizado
 BotaoTexto.Size = UDim2.new(1, 0, 1, 0)
 BotaoTexto.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
 BotaoTexto.TextColor3 = Color3.fromRGB(255, 255, 255)
 BotaoTexto.TextScaled = true
 BotaoTexto.Font = Enum.Font.Code
-BotaoTexto.TextStrokeTransparency = 0 -- Estilo
+BotaoTexto.TextStrokeTransparency = 0 
 BotaoTexto.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 BotaoTexto.Parent = BotaoFlutuante
 
--- Script de arrastar (Drag script)
+-- Drag script (arrastar)
 local dragging = false
 local dragStart = nil
 local originalPos = nil
@@ -271,11 +281,6 @@ BotaoTexto.MouseButton1Up:Connect(function()
     end
 end)
 
-BotaoTexto.MouseLeave:Connect(function()
-    if not dragging then return end
-    -- Se o mouse sair enquanto arrasta, a próxima ação (Mouse.Move) o moverá
-end)
-
 RunService.RenderStepped:Connect(function()
     if dragging then
         local mouse = LocalPlayer:GetMouse()
@@ -287,8 +292,8 @@ end)
 -- 2. JANELA PRINCIPAL (Menu)
 local MenuPrincipal = Instance.new("Frame")
 MenuPrincipal.Name = "MenuPrincipal"
-MenuPrincipal.Size = UDim2.new(0, 250, 0, 200) -- Não tão grande
-MenuPrincipal.Position = UDim2.new(0.5, -125, 0.5, -100) -- Centro da tela
+MenuPrincipal.Size = UDim2.new(0, 250, 0, 200) -- Tamanho compacto
+MenuPrincipal.Position = UDim2.new(0.5, -125, 0.5, -100)
 MenuPrincipal.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 MenuPrincipal.BorderSizePixel = 0
 MenuPrincipal.Visible = false
@@ -306,10 +311,6 @@ Header.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
 Header.BorderSizePixel = 0
 Header.Parent = MenuPrincipal
 
-local UICornerHeader = Instance.new("UICorner")
-UICornerHeader.CornerRadius = UDim.new(0, 10)
-UICornerHeader.Parent = Header
-
 local Titulo = Instance.new("TextLabel")
 Titulo.Text = "🥃 WHISKY MENU"
 Titulo.Size = UDim2.new(1, 0, 1, 0)
@@ -320,7 +321,7 @@ Titulo.TextScaled = true
 Titulo.TextStrokeTransparency = 0
 Titulo.Parent = Header
 
--- Botões de Funcionalidade
+-- Botões de Funcionalidade Container
 local Container = Instance.new("Frame")
 Container.Size = UDim2.new(1, -20, 1, -50)
 Container.Position = UDim2.new(0, 10, 0, 40)
@@ -351,33 +352,25 @@ TextButton.Font = Enum.Font.SourceSans
 TextButton.TextScaled = true
 TextButton.Parent = BotaoAutoUber
 BotaoAutoUber.TextButton = TextButton -- Referência
-local autoUberOn = false
 
 TextButton.MouseButton1Click:Connect(function()
-    if autoUberOn then
+    if autoUberAtivo then
         pararAutoUber()
     else
         iniciarAutoUber()
     end
-    autoUberOn = not autoUberOn
 end)
 
 -- Conexão de Abrir/Fechar
 BotaoTexto.MouseButton1Click:Connect(function()
-    MenuPrincipal.Visible = not MenuPrincipal.Visible
-    BotaoFlutuante.Visible = not MenuPrincipal.Visible
+    -- Checa se não estava arrastando antes de abrir/fechar
+    if not dragging and (BotaoFlutuante.AbsolutePosition - originalPos).Magnitude < 10 then 
+        MenuPrincipal.Visible = not MenuPrincipal.Visible
+        BotaoFlutuante.Visible = not MenuPrincipal.Visible
+    end
 end)
 
--- Fecha o menu se ele for aberto no início, deixando apenas o botão flutuante
 MenuPrincipal.Visible = false
 BotaoFlutuante.Visible = true
 
-print("[WHISKY] Interface (WY) carregada! Clique para abrir o menu.")
-
--- Inicia o monitor de carro
-carro = encontrarCarro()
-if carro then
-    print("[WHISKY] ✅ Carro encontrado.")
-else
-    print("[WHISKY] ⚠️ Entre em um carro para começar.")
-end
+print("[WHISKY SOFT] Interface (WY) carregada! Script pronto.")
